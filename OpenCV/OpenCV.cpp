@@ -46,6 +46,9 @@ double HorizontalViewAngle = 1.5f;
 double VerticalViewAngle = 1.2f;
 int ViewSize = 500;
 
+Mat inverse;
+std::vector<Point2f> inverse_corner;
+
 double yAxisRotate = 0;
 double zAxisRotate = 0;
 
@@ -57,9 +60,9 @@ void GenView(Mat SourceImg);
 void KeyDownEvent(int ch, Mat SourceImg);
 void InsertClip(Mat SourceImg);
 
-//#######
-//Image Processing
-//#######
+/*
+	Image Interpolation
+*/
 Axis getNearPixel(Mat Img, int x, int y)
 {
 	int col = 1;
@@ -121,9 +124,9 @@ Mat remapImage(Mat imgIn)
 }
 
 
-//#######
-//Generate View
-//#######
+/*
+	Generate View
+*/
 void GenView(Mat SourceImg)
 {
 	int width = SourceImg.cols;
@@ -631,12 +634,9 @@ static Mat drawGoodMatches(
 
 	// drawing the results
 	Mat img_matches;
-
-
 	drawMatches(img1, keypoints1, img2, keypoints2,
 		good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
 		std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-
 
 	//-- Localize the object
 	std::vector<Point2f> obj;
@@ -659,7 +659,13 @@ static Mat drawGoodMatches(
 	Mat H = findHomography(obj, scene, RANSAC);
 	perspectiveTransform(obj_corners, scene_corners, H);
 
+	inverse = H.inv();
+	perspectiveTransform(scene_corners, obj_corners, inverse);
+
+	inverse_corner = obj_corners;
 	scene_corners_ = scene_corners;
+
+	
 
 	//-- Draw lines between the corners (the mapped object in the scene - image_2 )
 	line(img_matches,
@@ -688,9 +694,8 @@ int main(int argc, char* argv[])
     /* 파노라마 이미지 불러오기 */
     Mat img = imread("Panorama.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
     Mat srcImage; 
-    cv::resize(img, srcImage, Size(img.cols*1.5, img.rows*1.5), 0, 0);
+    cv::resize(img, srcImage, Size(img.cols * 1.5f, img.rows * 1.5f), 0, 0);
     
-
      /* Mat 선언 */
     Mat SphericalToCubemap;
 
@@ -710,8 +715,6 @@ int main(int argc, char* argv[])
 	}
 
     imwrite("scene.jpg", SphericalToCubemap);
-    //imshow("temp", SphericalToCubemap);
-    //waitKey(0);
 
 	std::string rightName = "scene.jpg";
 	imread(rightName, IMREAD_COLOR).copyTo(img2);
@@ -755,20 +758,50 @@ int main(int argc, char* argv[])
 
 	std::vector<Point2f> corner;
 	Mat img_matches = drawGoodMatches(img1.getMat(ACCESS_READ), img2.getMat(ACCESS_READ), keypoints1, keypoints2, matches, corner);
-
+	line(img_matches, inverse_corner[0], inverse_corner[1], Scalar(0, 255, 0), 2, LINE_AA);
+	line(img_matches, inverse_corner[1], inverse_corner[2], Scalar(0, 255, 0), 2, LINE_AA);
+	line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
+	line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
 	//-- Show detected matches
-	//namedWindow("surf matches", WINDOW_AUTOSIZE);
-	//imshow("surf matches", img_matches);
+	namedWindow("surf matches", WINDOW_AUTOSIZE);
+	imshow("surf matches", img_matches);
 	imwrite(outpath, img_matches);
 
+	
+
+	//templateMatch(img_matches, corner, img1.getMat(ACCESS_READ));
 
 	// 일치하는 오브젝트 위치 표시하는 사각형 그리기
+
+	Point2f leftTop = corner[0];
+	Point2f rightBottom = corner[2];
+
 	line(img2, corner[0], corner[1], Scalar(0, 255, 0), 2, LINE_AA);
 	line(img2, corner[1], corner[2], Scalar(0, 255, 0), 2, LINE_AA);
 	line(img2, corner[2], corner[3], Scalar(0, 255, 0), 2, LINE_AA);
 	line(img2, corner[3], corner[0], Scalar(0, 255, 0), 2, LINE_AA);
 	//imshow("draw square", img2);
-    imwrite(result, img2);
+    
+	/*
+		이미지 대치
+	*/
+	int width, height;
+	width = rightBottom.x - leftTop.x;
+	height = rightBottom.y - leftTop.y;
+	Mat tempImg;
+	Mat temp = imread("temp.jpg");
+	
+	cv::resize(temp, tempImg, Size(width, height), 0, 0);
+
+	for (int j = 0; j < height; j++)
+	{
+		for (int i = 0; i < width; i++)
+		{
+			SphericalToCubemap.at<Vec3b>(leftTop.y + j , leftTop.x + i) = tempImg.at<Vec3b>(j, i);
+		}
+	}
+	
+	imwrite(result, SphericalToCubemap);
 
     Mat matched_Cubemap = imread("result.jpg");
     Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
