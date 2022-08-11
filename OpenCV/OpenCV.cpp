@@ -58,7 +58,6 @@ AxisDouble CalcThetaPhiToXYZ(double theta, double phi);
 AxisDouble CalcCubicXYZ(double x, double y, double z);
 void GenView(Mat SourceImg);
 void KeyDownEvent(int ch, Mat SourceImg);
-void InsertClip(Mat SourceImg);
 
 /*
 	Image Interpolation
@@ -568,6 +567,35 @@ Mat CvtSph2Cub(Mat* pano) {
 }
 
 /*
+	직선의 방정식
+*/
+
+float left(int y, vector<Point2f>& corners)
+{
+	float m = (corners[3].y - corners[0].y) / (corners[3].x - corners[0].x);
+	float x = (1 / m) * (y - corners[3].y) + corners[3].x;
+	return x;
+
+}
+float right(int y, vector<Point2f>& corners)
+{
+	float m = (corners[2].y - corners[1].y) / (corners[2].x - corners[1].x);
+	float x = (1 / m) * (y - corners[2].y) + corners[2].x;
+	return x;
+}
+float topEquation(int x, vector<Point2f>& corners)
+{
+	float m = (corners[1].y - corners[0].y) / (corners[1].x - corners[0].x);
+	float y = m * (x - corners[1].x) + corners[1].y;
+	return y;
+}
+float bottom(int x, vector<Point2f>& corners)
+{
+	float m = (corners[2].y - corners[3].y) / (corners[2].x - corners[3].x);
+	float y = m * (x - corners[2].x) + corners[2].y;
+	return y;
+}
+/*
 	SURF
 */
 static void workBegin()
@@ -665,8 +693,6 @@ static Mat drawGoodMatches(
 	inverse_corner = obj_corners;
 	scene_corners_ = scene_corners;
 
-	
-
 	//-- Draw lines between the corners (the mapped object in the scene - image_2 )
 	line(img_matches,
 		scene_corners[0] + Point2f((float)img1.cols, 0), scene_corners[1] + Point2f((float)img1.cols, 0),
@@ -736,7 +762,6 @@ int main(int argc, char* argv[])
 
 	//instantiate detectors/matchers
 	SURFDetector surf;
-
 	SURFMatcher<BFMatcher> matcher;
 
 	//-- start of timing section
@@ -767,46 +792,67 @@ int main(int argc, char* argv[])
 	imshow("surf matches", img_matches);
 	imwrite(outpath, img_matches);
 
-	
-
-	//templateMatch(img_matches, corner, img1.getMat(ACCESS_READ));
-
 	// 일치하는 오브젝트 위치 표시하는 사각형 그리기
 
-	Point2f leftTop = corner[0];
-	Point2f rightBottom = corner[2];
+	float minX = min(min(corner[0].x, corner[1].x), min(corner[2].x, corner[3].x));
+	float minY = min(min(corner[0].y, corner[1].y), min(corner[2].y, corner[3].y));
 
-	line(img2, corner[0], corner[1], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, corner[1], corner[2], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, corner[2], corner[3], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, corner[3], corner[0], Scalar(0, 255, 0), 2, LINE_AA);
-	//imshow("draw square", img2);
-    
+	float maxX = max(max(corner[0].x, corner[1].x), max(corner[2].x, corner[3].x));
+	float maxY = max(max(corner[0].y, corner[1].y), max(corner[2].y, corner[3].y));
+
+	Point2f leftTop = Point2f(minX, minY);
+	Point2f rightBottom = Point2f(maxX, maxY);
+
 	/*
-		이미지 대치
+		큐브맵 이미지의 패턴 영역 그리기
 	*/
+	line(img2, corner[0], corner[1], Scalar(0, 0, 255), 2, LINE_AA);
+	line(img2, corner[1], corner[2], Scalar(0, 0, 255), 2, LINE_AA);
+	line(img2, corner[2], corner[3], Scalar(0, 0, 255), 2, LINE_AA);
+	line(img2, corner[3], corner[0], Scalar(0, 0, 255), 2, LINE_AA);
+
+	/*
+		큐브맵 이미지 패턴 영역의 바운딩 박스 그리기
+	*/
+	line(img2, leftTop, Point2f(rightBottom.x, leftTop.y), Scalar(0, 255, 0), 2, LINE_AA);
+	line(img2, Point2f(rightBottom.x, leftTop.y), rightBottom, Scalar(0, 255, 0), 2, LINE_AA);
+	line(img2, rightBottom, Point2f(leftTop.x, rightBottom.y), Scalar(0, 255, 0), 2, LINE_AA);
+	line(img2, Point2f(leftTop.x, rightBottom.y), leftTop, Scalar(0, 255, 0), 2, LINE_AA);
+	imshow("draw square", img2);
+
 	int width, height;
 	width = rightBottom.x - leftTop.x;
 	height = rightBottom.y - leftTop.y;
 	Mat tempImg;
 	Mat temp = imread("temp.jpg");
-	
-	cv::resize(temp, tempImg, Size(width, height), 0, 0);
 
-	for (int j = 0; j < height; j++)
+	cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
+	
+	for (int y = leftTop.y; y < rightBottom.y; y++)
 	{
-		for (int i = 0; i < width; i++)
+		for (int x = leftTop.x; x < rightBottom.x; x++)
 		{
-			SphericalToCubemap.at<Vec3b>(leftTop.y + j , leftTop.x + i) = tempImg.at<Vec3b>(j, i);
+			if (y > topEquation(x, corner) && y < bottom(x, corner) && x > left(y, corner) && x < right(y, corner))
+			{
+				vector<Point2f> xy(1), convert(1);
+				xy[0] = Point(x, y);
+
+				perspectiveTransform(xy, convert, inverse);
+				SphericalToCubemap.at<Vec3b>(y, x) = tempImg.at<Vec3b>(int(convert[0].y), int(convert[0].x));
+			}
 		}
 	}
+    
+	/*
+		이미지 대치
+	*/
 	
 	imwrite(result, SphericalToCubemap);
 
     Mat matched_Cubemap = imread("result.jpg");
     Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
 
-    //imshow("spherical Image", resultSph);
+    imshow("spherical Image", resultSph);
 
 	GenView(resultSph);
 
