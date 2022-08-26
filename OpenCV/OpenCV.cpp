@@ -610,6 +610,10 @@ Mat CvtSph2Cub(Mat* pano) {
             face = prev_face;
         }
     }
+	
+	
+	cubemap = remapImage(cubemap);
+
     return cubemap;
 }
 
@@ -642,6 +646,14 @@ float bottom(int x, vector<Point2f>& corners)
 	float y = m * (x - corners[2].x) + corners[2].y;
 	return y;
 }
+
+void imageShow(string name, int width, int height, InputArray& img)
+{
+	namedWindow(name, 0);
+	resizeWindow(name, width, height);
+	imshow(name, img);
+}
+
 /*
 	SURF
 */
@@ -765,9 +777,9 @@ int main(int argc, char* argv[])
 	UMat img1, img2;
 
     /* 파노라마 이미지 불러오기 */
-    Mat img = imread("Panorama.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
+    Mat img = imread("sph.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
     Mat srcImage; 
-    cv::resize(img, srcImage, Size(img.cols * 1.5f, img.rows * 1.5f), 0, 0);
+    cv::resize(img, srcImage, Size(img.cols * 1.0f, img.rows * 1.0f), 0, 0);
     
      /* Mat 선언 */
     Mat SphericalToCubemap;
@@ -777,8 +789,9 @@ int main(int argc, char* argv[])
 
 	std::string outpath = "output.jpg";
     std::string result = "result.jpg";
+	std::string spre = "sph.jpg";
 
-	std::string leftName = "object.jpg";
+	std::string leftName = "ATrump.jpg";
 
 	imread(leftName, IMREAD_COLOR).copyTo(img1);
 	if (img1.empty())
@@ -835,8 +848,7 @@ int main(int argc, char* argv[])
 	line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
 	line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
 	//-- Show detected matches
-	namedWindow("surf matches", WINDOW_AUTOSIZE);
-	imshow("surf matches", img_matches);
+	imageShow("surf matches", 1200, 800, img_matches);
 	imwrite(outpath, img_matches);
 
 	// 일치하는 오브젝트 위치 표시하는 사각형 그리기
@@ -865,13 +877,13 @@ int main(int argc, char* argv[])
 	line(img2, Point2f(rightBottom.x, leftTop.y), rightBottom, Scalar(0, 255, 0), 2, LINE_AA);
 	line(img2, rightBottom, Point2f(leftTop.x, rightBottom.y), Scalar(0, 255, 0), 2, LINE_AA);
 	line(img2, Point2f(leftTop.x, rightBottom.y), leftTop, Scalar(0, 255, 0), 2, LINE_AA);
-	imshow("draw square", img2);
+	imageShow("draw square", 1200, 800, img2);
 
 	int width, height;
 	width = rightBottom.x - leftTop.x;
 	height = rightBottom.y - leftTop.y;
 	Mat tempImg;
-	Mat temp = imread("temp.jpg");
+	Mat temp = imread("ACard.jpg");
 
 	cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
 	
@@ -890,30 +902,24 @@ int main(int argc, char* argv[])
 		}
 	}
     
-	/*
-		이미지 대치
-	*/
-	
 	imwrite(result, SphericalToCubemap);
     Mat matched_Cubemap = imread("result.jpg");
-	//imshow("cubemap Image", matched_Cubemap);
+	imageShow("cubemap Image", 1200, 800, matched_Cubemap);
+
     Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
-	//imshow("cubemap Image", cubemapface->at(0));
+	imageShow("Spherical Image", 891, 446, resultSph);
+
+	//imwrite(spre, resultSph);
 	/* 
 		공격 텍스트 작성
 	*/
 	Mat img_text;
-	cubemapface->at(0).copyTo(img_text);
-	
 	char attack[30];
+	cubemapface->at(0).copyTo(img_text);
 	sprintf_s(attack, "1st Attack");
+	putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
 
-	putText(img_text, attack, Point(img_text.cols / 16, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
-	imshow("attack", img_text);
-	waitKey(0);
-
-    //imshow("spherical Image", resultSph);
-
+	imageShow("attack", 300, 300, img_text);
 	//GenView(resultSph);
 
 	waitKey(0);
