@@ -498,8 +498,10 @@ Mat CvtCub2Sph(Mat* cube, Mat* original) {
 
 			//cout << faceIndex << " " << indexX << " " << indexY << " " << '\n';
 
-			cubemapface->at(faceIndex).at<Vec3b>(indexY, indexX) = cube->at<Vec3b>(yPixel, xPixel);
-			spherical.at<Vec3b>(j, i) = cube->at<Vec3b>(yPixel, xPixel);
+			if (indexX != cubeFaceWidth && indexY != cubeFaceHeight) { // 큐브맵 이미지 out of bound 방지
+				cubemapface->at(faceIndex).at<Vec3b>(indexY, indexX) = cube->at<Vec3b>(yPixel, xPixel);
+				spherical.at<Vec3b>(j, i) = cube->at<Vec3b>(yPixel, xPixel);
+			}
 		}
 
 	}
@@ -605,15 +607,14 @@ Mat CvtSph2Cub(Mat* pano) {
             polarX = 2 * edge * ((phi + PI) / PI);
             polarY = 2 * edge * (((PI / 2) - theta) / PI);
 
-            cubemap.at<Vec3b>(y, x) = pano->at<Vec3b>(polarY, polarX);
+			if(polarX != pano->size().width && polarY != pano->size().height) // 구면 이미지 out of bound 방지
+				cubemap.at<Vec3b>(y, x) = pano->at<Vec3b>(polarY, polarX);
 
             face = prev_face;
         }
     }
 	
-	
 	cubemap = remapImage(cubemap);
-
     return cubemap;
 }
 
@@ -777,15 +778,12 @@ int main(int argc, char* argv[])
 	UMat img1, img2;
 
     /* 파노라마 이미지 불러오기 */
-    Mat img = imread("sph.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
+    Mat img = imread("Panorama2.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
     Mat srcImage; 
-    cv::resize(img, srcImage, Size(img.cols * 1.0f, img.rows * 1.0f), 0, 0);
+    cv::resize(img, srcImage, Size(img.cols * 0.5f, img.rows * 0.5f), 0, 0);
     
      /* Mat 선언 */
-    Mat SphericalToCubemap;
-
-    /* 변환함수 */
-    SphericalToCubemap = CvtSph2Cub(&srcImage);
+    Mat SphericalToCubemap = CvtSph2Cub(&srcImage);
 
 	std::string outpath = "output.jpg";
     std::string result = "result.jpg";
@@ -882,8 +880,9 @@ int main(int argc, char* argv[])
 	int width, height;
 	width = rightBottom.x - leftTop.x;
 	height = rightBottom.y - leftTop.y;
+
+	Mat temp = imread("Bcard.jpg");
 	Mat tempImg;
-	Mat temp = imread("ACard.jpg");
 
 	cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
 	
@@ -902,24 +901,25 @@ int main(int argc, char* argv[])
 		}
 	}
     
+
 	imwrite(result, SphericalToCubemap);
     Mat matched_Cubemap = imread("result.jpg");
-	imageShow("cubemap Image", 1200, 800, matched_Cubemap);
+	imageShow("matched cubemap Image", 1200, 800, matched_Cubemap);
 
     Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
-	imageShow("Spherical Image", 891, 446, resultSph);
-
-	//imwrite(spre, resultSph);
+	imageShow("Spherical Image", 1200, 600, resultSph);
+	imwrite(spre, resultSph);
 	/* 
 		공격 텍스트 작성
 	*/
 	Mat img_text;
 	char attack[30];
-	cubemapface->at(0).copyTo(img_text);
+	cubemapface->at(3).copyTo(img_text);
 	sprintf_s(attack, "1st Attack");
 	putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
 
 	imageShow("attack", 300, 300, img_text);
+	imwrite("attack.jpg", img_text);
 	//GenView(resultSph);
 
 	waitKey(0);
