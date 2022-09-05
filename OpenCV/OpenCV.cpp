@@ -25,6 +25,18 @@ int64 work_begin = 0;
 int64 work_end = 0;
 
 /*
+	게임 플레이
+*/
+int gameTurns = 2;
+int turn = 0;
+
+struct Player
+{
+	int hp = 30;
+	int damage = 10;
+};
+
+/*
     뷰 영상 출력을 위한 구조체
 */
 struct Axis
@@ -52,18 +64,9 @@ std::vector<Point2f> inverse_corner;
 double yAxisRotate = 0;
 double zAxisRotate = 0;
 
-
-int FrontX = 0, FrontY = 0;
-int BackX = 0, BackY = 0;
-int LeftX = 0, LeftY = 0;
-int RightX = 0, RightY = 0;
-int TopX = 0, TopY = 0;
-int BottomX = 0, BottomY = 0;
-
 vector<Mat> cubemapface[6]; // Back, Left, Front, Right, Top, Bottom
 int faceIndex;
 int indexX, indexY;
-
 
 Axis getNearPixel(Mat Img, int x, int y);
 Mat remapImage(Mat imgIn);
@@ -134,7 +137,6 @@ Mat remapImage(Mat imgIn)
 	return RemapImg;
 
 }
-
 
 /*
 	Generate View
@@ -311,7 +313,6 @@ AxisDouble CalcCubicXYZ(double x, double y, double z)
 
 	return axis;
 }
-
 
 /*
 	1. Spherical -> Cubemap
@@ -509,6 +510,7 @@ Mat CvtCub2Sph(Mat* cube, Mat* original) {
 	{
 		cubemapface->at(i) = remapImage(cubemapface->at(i));
 	}
+	spherical = remapImage(spherical);
 	return spherical;
 }
 Mat CvtSph2Cub(Mat* pano) {
@@ -769,159 +771,196 @@ static Mat drawGoodMatches(
 
 	return img_matches;
 }
+
+void Render()
+{
+	Player A, B;
+	B.hp = 20;
+
+	while (true) {
+		Mat img_text;
+		char attack[30];
+		char defense[30];
+		cubemapface->at(3).copyTo(img_text);
+
+		sprintf_s(attack, "A Attack");
+		sprintf_s(defense, "B Defense");
+
+		putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
+		putText(img_text, defense, Point(img_text.cols / 12, img_text.rows / 6), 0, 1, Scalar(0, 0, 0), 2, 8);		
+
+		imageShow("Screen", 300, 300, img_text);
+		imwrite("Screen.jpg", img_text);
+
+		waitKey(0);
+	}
+}
+
 ////////////////////////////////////////////////////
 // This program demonstrates the usage of SURF_OCL.
 // use cpu findHomography interface to calculate the transformation matrix
 int main(int argc, char* argv[])
 {
+	while (turn < gameTurns) {
+		UMat img1, img2;
+		Mat img;
+		Mat srcImage;
+		Mat temp;
+		Mat tempImg;
+		std::string leftName;
 
-	UMat img1, img2;
-
-    /* 파노라마 이미지 불러오기 */
-    Mat img = imread("Panorama2.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
-    Mat srcImage; 
-    cv::resize(img, srcImage, Size(img.cols * 0.5f, img.rows * 0.5f), 0, 0);
-    
-     /* Mat 선언 */
-    Mat SphericalToCubemap = CvtSph2Cub(&srcImage);
-
-	std::string outpath = "output.jpg";
-    std::string result = "result.jpg";
-	std::string spre = "sph.jpg";
-
-	std::string leftName = "ATrump.jpg";
-
-	imread(leftName, IMREAD_COLOR).copyTo(img1);
-	if (img1.empty())
-	{
-		std::cout << "Couldn't load " << leftName << std::endl;
-		return EXIT_FAILURE;
-	}
-
-    imwrite("scene.jpg", SphericalToCubemap);
-
-	std::string rightName = "scene.jpg";
-	imread(rightName, IMREAD_COLOR).copyTo(img2);
-	if (img2.empty())
-	{
-		std::cout << "Couldn't load " << rightName << std::endl;
-		return EXIT_FAILURE;
-	}
-
-	double surf_time = 0.;
-
-	//declare input/output
-	std::vector<KeyPoint> keypoints1, keypoints2;
-	std::vector<DMatch> matches;
-
-	UMat _descriptors1, _descriptors2;
-	Mat descriptors1 = _descriptors1.getMat(ACCESS_RW),
-		descriptors2 = _descriptors2.getMat(ACCESS_RW);
-
-	//instantiate detectors/matchers
-	SURFDetector surf;
-	SURFMatcher<BFMatcher> matcher;
-
-	//-- start of timing section
-
-	for (int i = 0; i <= LOOP_NUM; i++)
-	{
-		if (i == 1) workBegin();
-		surf(img1.getMat(ACCESS_READ), Mat(), keypoints1, descriptors1);
-		surf(img2.getMat(ACCESS_READ), Mat(), keypoints2, descriptors2);
-		matcher.match(descriptors1, descriptors2, matches);
-	}
-	workEnd();
-	std::cout << "FOUND " << keypoints1.size() << " keypoints on first image" << std::endl;
-	std::cout << "FOUND " << keypoints2.size() << " keypoints on second image" << std::endl;
-
-	surf_time = getTime();
-	std::cout << "SURF run time: " << surf_time / LOOP_NUM << " ms" << std::endl << "\n";
-
-
-	std::vector<Point2f> corner;
-	Mat img_matches = drawGoodMatches(img1.getMat(ACCESS_READ), img2.getMat(ACCESS_READ), keypoints1, keypoints2, matches, corner);
-	line(img_matches, inverse_corner[0], inverse_corner[1], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img_matches, inverse_corner[1], inverse_corner[2], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
-	line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
-	//-- Show detected matches
-	imageShow("surf matches", 1200, 800, img_matches);
-	imwrite(outpath, img_matches);
-
-	// 일치하는 오브젝트 위치 표시하는 사각형 그리기
-
-	float minX = min(min(corner[0].x, corner[1].x), min(corner[2].x, corner[3].x));
-	float minY = min(min(corner[0].y, corner[1].y), min(corner[2].y, corner[3].y));
-
-	float maxX = max(max(corner[0].x, corner[1].x), max(corner[2].x, corner[3].x));
-	float maxY = max(max(corner[0].y, corner[1].y), max(corner[2].y, corner[3].y));
-
-	Point2f leftTop = Point2f(minX, minY);
-	Point2f rightBottom = Point2f(maxX, maxY);
-
-	/*
-		큐브맵 이미지의 패턴 영역 그리기
-	*/
-	line(img2, corner[0], corner[1], Scalar(0, 0, 255), 2, LINE_AA);
-	line(img2, corner[1], corner[2], Scalar(0, 0, 255), 2, LINE_AA);
-	line(img2, corner[2], corner[3], Scalar(0, 0, 255), 2, LINE_AA);
-	line(img2, corner[3], corner[0], Scalar(0, 0, 255), 2, LINE_AA);
-
-	/*
-		큐브맵 이미지 패턴 영역의 바운딩 박스 그리기
-	*/
-	line(img2, leftTop, Point2f(rightBottom.x, leftTop.y), Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, Point2f(rightBottom.x, leftTop.y), rightBottom, Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, rightBottom, Point2f(leftTop.x, rightBottom.y), Scalar(0, 255, 0), 2, LINE_AA);
-	line(img2, Point2f(leftTop.x, rightBottom.y), leftTop, Scalar(0, 255, 0), 2, LINE_AA);
-	imageShow("draw square", 1200, 800, img2);
-
-	int width, height;
-	width = rightBottom.x - leftTop.x;
-	height = rightBottom.y - leftTop.y;
-
-	Mat temp = imread("Bcard.jpg");
-	Mat tempImg;
-
-	cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
-	
-	for (int y = leftTop.y; y < rightBottom.y; y++)
-	{
-		for (int x = leftTop.x; x < rightBottom.x; x++)
+		/* 파노라마 이미지 불러오기 */
+		if (turn == 0)
 		{
-			if (y > topEquation(x, corner) && y < bottom(x, corner) && x > left(y, corner) && x < right(y, corner))
-			{
-				vector<Point2f> xy(1), convert(1);
-				xy[0] = Point(x, y);
+			img = imread("Panorama2.jpg"); //자신이 저장시킨 이미지 이름이 입력되어야 함, 확장자까지
+			cv::resize(img, srcImage, Size(img.cols * 0.5f, img.rows * 0.5f), 0, 0);
+			leftName = "ATrump.jpg";
+			temp = imread("Acard.jpg");
+		}
+		else if (turn == 1)
+		{
+			img = imread("sph.jpg");
+			cv::resize(img, srcImage, Size(img.cols * 1.0f, img.rows * 1.0f), 0, 0);
+			leftName = "BTrump.png";
+			temp = imread("Bcard.jpg");
+		}
+		else
+		{
+			cout << "Background is not available" << endl;
+			return 0;
+		}
 
-				perspectiveTransform(xy, convert, inverse);
-				SphericalToCubemap.at<Vec3b>(y, x) = tempImg.at<Vec3b>(int(convert[0].y), int(convert[0].x));
+
+		/* Mat 선언 */
+		Mat SphericalToCubemap = CvtSph2Cub(&srcImage);
+
+		std::string outpath = "output.jpg";
+		std::string result = "result.jpg";
+
+		imread(leftName, IMREAD_COLOR).copyTo(img1);
+		if (img1.empty())
+		{
+			std::cout << "Couldn't load " << leftName << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		imwrite("scene.jpg", SphericalToCubemap);
+
+		std::string rightName = "scene.jpg";
+		imread(rightName, IMREAD_COLOR).copyTo(img2);
+		if (img2.empty())
+		{
+			std::cout << "Couldn't load " << rightName << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		double surf_time = 0.;
+
+		//declare input/output
+		std::vector<KeyPoint> keypoints1, keypoints2;
+		std::vector<DMatch> matches;
+
+		UMat _descriptors1, _descriptors2;
+		Mat descriptors1 = _descriptors1.getMat(ACCESS_RW),
+			descriptors2 = _descriptors2.getMat(ACCESS_RW);
+
+		//instantiate detectors/matchers
+		SURFDetector surf;
+		SURFMatcher<BFMatcher> matcher;
+
+		//-- start of timing section
+
+		for (int i = 0; i <= LOOP_NUM; i++)
+		{
+			if (i == 1) workBegin();
+			surf(img1.getMat(ACCESS_READ), Mat(), keypoints1, descriptors1);
+			surf(img2.getMat(ACCESS_READ), Mat(), keypoints2, descriptors2);
+			matcher.match(descriptors1, descriptors2, matches);
+		}
+		workEnd();
+		std::cout << "FOUND " << keypoints1.size() << " keypoints on first image" << std::endl;
+		std::cout << "FOUND " << keypoints2.size() << " keypoints on second image" << std::endl;
+
+		surf_time = getTime();
+		std::cout << "SURF run time: " << surf_time / LOOP_NUM << " ms" << std::endl << "\n";
+
+
+		std::vector<Point2f> corner;
+		Mat img_matches = drawGoodMatches(img1.getMat(ACCESS_READ), img2.getMat(ACCESS_READ), keypoints1, keypoints2, matches, corner);
+		line(img_matches, inverse_corner[0], inverse_corner[1], Scalar(0, 255, 0), 2, LINE_AA);
+		line(img_matches, inverse_corner[1], inverse_corner[2], Scalar(0, 255, 0), 2, LINE_AA);
+		line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
+		line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
+		//-- Show detected matches
+		imageShow("surf matches", 1200, 800, img_matches);
+		imwrite(outpath, img_matches);
+
+		// 일치하는 오브젝트 위치 표시하는 사각형 그리기
+
+		float minX = min(min(corner[0].x, corner[1].x), min(corner[2].x, corner[3].x));
+		float minY = min(min(corner[0].y, corner[1].y), min(corner[2].y, corner[3].y));
+
+		float maxX = max(max(corner[0].x, corner[1].x), max(corner[2].x, corner[3].x));
+		float maxY = max(max(corner[0].y, corner[1].y), max(corner[2].y, corner[3].y));
+
+		Point2f leftTop = Point2f(minX, minY);
+		Point2f rightBottom = Point2f(maxX, maxY);
+
+		/*
+			큐브맵 이미지의 패턴 영역 그리기
+		*/
+		line(img2, corner[0], corner[1], Scalar(0, 0, 255), 2, LINE_AA);
+		line(img2, corner[1], corner[2], Scalar(0, 0, 255), 2, LINE_AA);
+		line(img2, corner[2], corner[3], Scalar(0, 0, 255), 2, LINE_AA);
+		line(img2, corner[3], corner[0], Scalar(0, 0, 255), 2, LINE_AA);
+
+		/*
+			큐브맵 이미지 패턴 영역의 바운딩 박스 그리기
+		*/
+		line(img2, leftTop, Point2f(rightBottom.x, leftTop.y), Scalar(0, 255, 0), 2, LINE_AA);
+		line(img2, Point2f(rightBottom.x, leftTop.y), rightBottom, Scalar(0, 255, 0), 2, LINE_AA);
+		line(img2, rightBottom, Point2f(leftTop.x, rightBottom.y), Scalar(0, 255, 0), 2, LINE_AA);
+		line(img2, Point2f(leftTop.x, rightBottom.y), leftTop, Scalar(0, 255, 0), 2, LINE_AA);
+		//imageShow("draw square", 1200, 800, img2);
+
+		int width, height;
+		width = rightBottom.x - leftTop.x;
+		height = rightBottom.y - leftTop.y;
+
+
+		cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
+
+		for (int y = leftTop.y; y < rightBottom.y; y++)
+		{
+			for (int x = leftTop.x; x < rightBottom.x; x++)
+			{
+				if (y > topEquation(x, corner) && y < bottom(x, corner) && x > left(y, corner) && x < right(y, corner))
+				{
+					vector<Point2f> xy(1), convert(1);
+					xy[0] = Point(x, y);
+
+					perspectiveTransform(xy, convert, inverse);
+					SphericalToCubemap.at<Vec3b>(y, x) = tempImg.at<Vec3b>(int(convert[0].y), int(convert[0].x));
+				}
 			}
 		}
+
+
+		imwrite(result, SphericalToCubemap);
+		Mat matched_Cubemap = imread("result.jpg");
+		//imageShow("matched cubemap Image", 1200, 800, matched_Cubemap);
+
+		Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
+		//imageShow("Spherical Image", 1200, 600, resultSph);
+		imwrite("sph.jpg", resultSph);
+		turn++;
 	}
-    
 
-	imwrite(result, SphericalToCubemap);
-    Mat matched_Cubemap = imread("result.jpg");
-	imageShow("matched cubemap Image", 1200, 800, matched_Cubemap);
-
-    Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
-	imageShow("Spherical Image", 1200, 600, resultSph);
-	imwrite(spre, resultSph);
 	/* 
-		공격 텍스트 작성
+		게임 Render
 	*/
-	Mat img_text;
-	char attack[30];
-	cubemapface->at(3).copyTo(img_text);
-	sprintf_s(attack, "1st Attack");
-	putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
+	
+	Render();
 
-	imageShow("attack", 300, 300, img_text);
-	imwrite("attack.jpg", img_text);
-	//GenView(resultSph);
-
-	waitKey(0);
 	return EXIT_SUCCESS;
 }
