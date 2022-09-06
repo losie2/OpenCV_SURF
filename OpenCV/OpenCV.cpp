@@ -32,8 +32,8 @@ int turn = 0;
 
 struct Player
 {
-	int hp = 30;
-	int damage = 10;
+	int hp;
+	int damage;
 };
 
 /*
@@ -775,23 +775,50 @@ static Mat drawGoodMatches(
 void Render()
 {
 	Player A, B;
+	A.damage = 10;
+	B.damage = 5;
+	A.hp = 30;
 	B.hp = 20;
 
+	int i = 0;
+	Mat img_text;
+	char attack[30];
+	char defense[30];
+	char hpbar[30];
 	while (true) {
-		Mat img_text;
-		char attack[30];
-		char defense[30];
-		cubemapface->at(3).copyTo(img_text);
+		if (A.hp == 0)
+		{
+			cout << " B win!" << endl;
+			return;
+		}
+		else if (B.hp == 0)
+		{
+			cout << " A win!" << endl;
+			return;
+		}
 
-		sprintf_s(attack, "A Attack");
-		sprintf_s(defense, "B Defense");
-
+		if (i % 2 == 0) {
+			cubemapface->at(1).copyTo(img_text);
+			sprintf_s(attack, "A Attack");
+			sprintf_s(defense, "B Defense");
+			sprintf_s(hpbar, "Player B HP : %d", B.hp);
+			B.hp = B.hp - A.damage;
+		}
+		else
+		{
+			cubemapface->at(3).copyTo(img_text);
+			sprintf_s(attack, "B Attack");
+			sprintf_s(defense, "A Defense");
+			sprintf_s(hpbar, "Player A HP : %d", A.hp);
+			A.hp = A.hp - B.damage;
+		}
 		putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
-		putText(img_text, defense, Point(img_text.cols / 12, img_text.rows / 6), 0, 1, Scalar(0, 0, 0), 2, 8);		
+		putText(img_text, defense, Point(img_text.cols / 12, img_text.rows / 6), 0, 1, Scalar(0, 0, 0), 2, 8);
+		putText(img_text, hpbar, Point(img_text.cols / 12, img_text.rows / 8), 0, 1, Scalar(0, 0, 0), 2, 8);
 
 		imageShow("Screen", 300, 300, img_text);
 		imwrite("Screen.jpg", img_text);
-
+		++i;
 		waitKey(0);
 	}
 }
