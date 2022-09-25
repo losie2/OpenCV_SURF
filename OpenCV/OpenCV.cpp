@@ -1,5 +1,7 @@
 ﻿#include <iostream>
 #include <stdio.h>
+#include <cstdlib>
+#include <ctime>
 #include "opencv2/core.hpp"
 #include "opencv2/core/utility.hpp"
 #include "opencv2/core/ocl.hpp"
@@ -32,8 +34,8 @@ int turn = 0;
 
 struct Player
 {
-	int hp;
-	int damage;
+	double hp;
+	double damage = 1;
 };
 
 /*
@@ -722,6 +724,7 @@ static Mat drawGoodMatches(
 
 	std::cout << "Calculating homography using " << ptsPairs << " point pairs." << std::endl;
 
+
 	// drawing the results
 	Mat img_matches;
 	drawMatches(img1, keypoints1, img2, keypoints2,
@@ -752,10 +755,10 @@ static Mat drawGoodMatches(
 	inverse = H.inv();
 	perspectiveTransform(scene_corners, obj_corners, inverse);
 
+	
 	inverse_corner = obj_corners;
 	scene_corners_ = scene_corners;
 
-	//-- Draw lines between the corners (the mapped object in the scene - image_2 )
 	line(img_matches,
 		scene_corners[0] + Point2f((float)img1.cols, 0), scene_corners[1] + Point2f((float)img1.cols, 0),
 		Scalar(0, 255, 0), 2, LINE_AA);
@@ -775,49 +778,90 @@ static Mat drawGoodMatches(
 void Render()
 {
 	Player A, B;
-	A.damage = 10;
-	B.damage = 5;
-	A.hp = 30;
-	B.hp = 20;
+	A.hp = 100;
+	B.hp = 100;
+
+	Mat fire = imread("fire.jpg");
+	resize(fire, fire, Size(cubemapface->at(0).cols, cubemapface->at(0).rows), 0, 0);
+
+	Mat bluefire = imread("bluefire.jpg");
+	resize(bluefire, bluefire, Size(cubemapface->at(0).cols, cubemapface->at(0).rows), 0, 0);
 
 	int i = 0;
-	Mat img_text;
+	
+	Mat screenA, screenB;
+	Mat dstA, dstB;
+
 	char attack[30];
 	char defense[30];
 	char hpbar[30];
+	char win[30];
+
+	cubemapface->at(3).copyTo(screenA);
+	sprintf_s(attack, "B Attack");
+	sprintf_s(defense, "A Defense");
+	sprintf_s(hpbar, "Player A HP : %f", A.hp);
+
+	addWeighted(fire, 1 - (A.hp / 100), screenA, (A.hp / 100), 0, dstA);
+
+	putText(dstA, attack, Point(screenA.cols / 12, screenA.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
+	putText(dstA, defense, Point(screenA.cols / 12, screenA.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
+	putText(dstA, hpbar, Point(screenA.cols / 12, screenA.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+
+
 	while (true) {
-		if (A.hp == 0)
+		A.damage = (double)(rand() % 15) + 1.0f;
+		B.damage = (double)(rand() % 15) + 1.0f;
+		if (A.hp <= 0)
 		{
-			cout << " B win!" << endl;
+			sprintf_s(win, "B Win !");
+			putText(bluefire, win, Point(screenA.cols / 2 - 10, screenA.rows / 2), 0, 1, Scalar(255, 255, 0), 2, 8);
+			imageShow("Result", 500, 500, bluefire);
+			waitKey(0);
 			return;
 		}
-		else if (B.hp == 0)
+		if (B.hp <= 0)
 		{
-			cout << " A win!" << endl;
+			sprintf_s(win, "A Win !");
+			putText(fire, win, Point(screenA.cols / 2 - 10, screenA.rows / 2), 0, 1, Scalar(255, 255, 0), 2, 8);
+			imageShow("Result", 500, 500, fire);
+			waitKey(0);
 			return;
 		}
 
 		if (i % 2 == 0) {
-			cubemapface->at(1).copyTo(img_text);
+			cubemapface->at(1).copyTo(screenB);
+			B.hp = B.hp - A.damage;
+			
 			sprintf_s(attack, "A Attack");
 			sprintf_s(defense, "B Defense");
-			sprintf_s(hpbar, "Player B HP : %d", B.hp);
-			B.hp = B.hp - A.damage;
+			sprintf_s(hpbar, "Player B HP : %f", B.hp);
+			
+			addWeighted(fire, 1 - (B.hp / 100), screenB, B.hp / 100, 0, dstB);
+
+			putText(dstB, attack, Point(screenB.cols / 12, screenB.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
+			putText(dstB, defense, Point(screenB.cols / 12, screenB.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
+			putText(dstB, hpbar, Point(screenB.cols / 12, screenB.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+			
 		}
 		else
 		{
-			cubemapface->at(3).copyTo(img_text);
+			cubemapface->at(3).copyTo(screenA);
 			sprintf_s(attack, "B Attack");
 			sprintf_s(defense, "A Defense");
-			sprintf_s(hpbar, "Player A HP : %d", A.hp);
-			A.hp = A.hp - B.damage;
-		}
-		putText(img_text, attack, Point(img_text.cols / 12, img_text.rows / 4), 0, 1, Scalar(0, 0, 0), 2, 8);
-		putText(img_text, defense, Point(img_text.cols / 12, img_text.rows / 6), 0, 1, Scalar(0, 0, 0), 2, 8);
-		putText(img_text, hpbar, Point(img_text.cols / 12, img_text.rows / 8), 0, 1, Scalar(0, 0, 0), 2, 8);
+			sprintf_s(hpbar, "Player A HP : %f", A.hp);
 
-		imageShow("Screen", 300, 300, img_text);
-		imwrite("Screen.jpg", img_text);
+			addWeighted(bluefire, 1 - (A.hp / 100), screenA, (A.hp / 100), 0, dstA);
+			A.hp = A.hp - B.damage;
+
+			putText(dstA, attack, Point(screenA.cols / 12, screenA.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
+			putText(dstA, defense, Point(screenA.cols / 12, screenA.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
+			putText(dstA, hpbar, Point(screenA.cols / 12, screenA.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+		}
+		
+		imageShow("ScreenA", 500, 500, dstA);
+		imageShow("ScreenB", 500, 500, dstB);
+		//imwrite("Screen.jpg", img_text);
 		++i;
 		waitKey(0);
 	}
@@ -828,6 +872,9 @@ void Render()
 // use cpu findHomography interface to calculate the transformation matrix
 int main(int argc, char* argv[])
 {
+	srand((unsigned int)time(NULL));
+	Mat resultSph;
+
 	while (turn < gameTurns) {
 		UMat img1, img2;
 		Mat img;
@@ -919,7 +966,7 @@ int main(int argc, char* argv[])
 		line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
 		line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
 		//-- Show detected matches
-		imageShow("surf matches", 1200, 800, img_matches);
+		//imageShow("surf matches", 1200, 800, img_matches);
 		imwrite(outpath, img_matches);
 
 		// 일치하는 오브젝트 위치 표시하는 사각형 그리기
@@ -954,7 +1001,6 @@ int main(int argc, char* argv[])
 		width = rightBottom.x - leftTop.x;
 		height = rightBottom.y - leftTop.y;
 
-
 		cv::resize(temp, tempImg, Size(img1.cols, img1.rows), 0, 0);
 
 		for (int y = leftTop.y; y < rightBottom.y; y++)
@@ -972,12 +1018,11 @@ int main(int argc, char* argv[])
 			}
 		}
 
-
 		imwrite(result, SphericalToCubemap);
 		Mat matched_Cubemap = imread("result.jpg");
 		//imageShow("matched cubemap Image", 1200, 800, matched_Cubemap);
 
-		Mat resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
+		resultSph = CvtCub2Sph(&matched_Cubemap, &srcImage);
 		//imageShow("Spherical Image", 1200, 600, resultSph);
 		imwrite("sph.jpg", resultSph);
 		turn++;
@@ -987,6 +1032,7 @@ int main(int argc, char* argv[])
 		게임 Render
 	*/
 	
+	//GenView(resultSph);
 	Render();
 
 	return EXIT_SUCCESS;
