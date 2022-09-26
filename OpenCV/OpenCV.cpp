@@ -5,7 +5,7 @@
 #include "opencv2/core.hpp"
 #include "opencv2/core/utility.hpp"
 #include "opencv2/core/ocl.hpp"
-#include "opencv2/imgcodecs.hpp"
+
 #include "opencv2/highgui.hpp"
 #include "opencv2/features2d.hpp"
 #include "opencv2/calib3d.hpp"
@@ -36,6 +36,7 @@ struct Player
 {
 	double hp;
 	double damage = 1;
+	double defensive = 1;
 };
 
 /*
@@ -812,51 +813,72 @@ void Render()
 	while (true) {
 		A.damage = (double)(rand() % 15) + 1.0f;
 		B.damage = (double)(rand() % 15) + 1.0f;
+		A.defensive = (double)(rand() % 15) + 1.0f;
+		B.defensive = (double)(rand() % 15) + 1.0f;
+
 		if (A.hp <= 0)
 		{
+			destroyAllWindows();
 			sprintf_s(win, "B Win !");
 			putText(bluefire, win, Point(screenA.cols / 2 - 10, screenA.rows / 2), 0, 1, Scalar(255, 255, 0), 2, 8);
 			imageShow("Result", 500, 500, bluefire);
+			moveWindow("Result", 1000, 200);
 			waitKey(0);
 			return;
 		}
 		if (B.hp <= 0)
 		{
+			destroyAllWindows();
 			sprintf_s(win, "A Win !");
 			putText(fire, win, Point(screenA.cols / 2 - 10, screenA.rows / 2), 0, 1, Scalar(255, 255, 0), 2, 8);
 			imageShow("Result", 500, 500, fire);
+			moveWindow("Result", 1000, 1000);
 			waitKey(0);
 			return;
 		}
 
 		if (i % 2 == 0) {
 			cubemapface->at(1).copyTo(screenB);
-			B.hp = B.hp - A.damage;
-			
-			sprintf_s(attack, "A Attack");
-			sprintf_s(defense, "B Defense");
-			sprintf_s(hpbar, "Player B HP : %f", B.hp);
-			
-			addWeighted(fire, 1 - (B.hp / 100), screenB, B.hp / 100, 0, dstB);
+						
+			if (A.damage > B.defensive) {
+				B.hp = B.hp - (A.damage - B.defensive);
+				sprintf_s(attack, "A Attack, Damage : %.1f", A.damage);
+				sprintf_s(defense, "B Defense, Defensive : %.1f", B.defensive);
+				sprintf_s(hpbar, "Player B HP : %.1f", B.hp);
 
-			putText(dstB, attack, Point(screenB.cols / 12, screenB.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
-			putText(dstB, defense, Point(screenB.cols / 12, screenB.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
-			putText(dstB, hpbar, Point(screenB.cols / 12, screenB.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
-			
+				addWeighted(fire, 1 - (B.hp / 100), screenB, B.hp / 100, 0, dstB);
+
+				putText(dstB, attack, Point(screenB.cols / 12, screenB.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
+				putText(dstB, defense, Point(screenB.cols / 12, screenB.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
+				putText(dstB, hpbar, Point(screenB.cols / 12, screenB.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+			}
+			else
+			{
+				sprintf_s(defense, "Defense !");
+				addWeighted(fire, 1 - (B.hp / 100), screenB, B.hp / 100, 0, dstB);
+				putText(dstB, defense, Point(screenB.cols / 2, screenB.rows / 2), 0, 1, Scalar(0, 255, 255), 2, 8);
+			}
 		}
 		else
 		{
-			cubemapface->at(3).copyTo(screenA);
-			sprintf_s(attack, "B Attack");
-			sprintf_s(defense, "A Defense");
-			sprintf_s(hpbar, "Player A HP : %f", A.hp);
+			if (B.damage > A.defensive) {
+				A.hp = A.hp - (B.damage - A.defensive);
+				sprintf_s(attack, "B Attack, Damage : %.1f", B.damage);
+				sprintf_s(defense, "A Defense, Defensive : %.1f", A.defensive);
+				sprintf_s(hpbar, "Player A HP : %.1f", A.hp);
 
-			addWeighted(bluefire, 1 - (A.hp / 100), screenA, (A.hp / 100), 0, dstA);
-			A.hp = A.hp - B.damage;
+				addWeighted(bluefire, 1 - (A.hp / 100), screenA, A.hp / 100, 0, dstA);
 
-			putText(dstA, attack, Point(screenA.cols / 12, screenA.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
-			putText(dstA, defense, Point(screenA.cols / 12, screenA.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
-			putText(dstA, hpbar, Point(screenA.cols / 12, screenA.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+				putText(dstA, attack, Point(screenA.cols / 12, screenA.rows / 4), 0, 1, Scalar(255, 0, 0), 2, 8);
+				putText(dstA, defense, Point(screenA.cols / 12, screenA.rows / 4 + 30), 0, 1, Scalar(0, 0, 255), 2, 8);
+				putText(dstA, hpbar, Point(screenA.cols / 12, screenA.rows / 8), 0, 1, Scalar(0, 255, 0), 2, 8);
+			}
+			else
+			{
+				sprintf_s(defense, "Defense !");
+				addWeighted(bluefire, 1 - (B.hp / 100), screenA, A.hp / 100, 0, dstA);
+				putText(dstA, defense, Point(screenA.cols / 2, screenA.rows / 2), 0, 1, Scalar(0, 255, 255), 2, 8);
+			}
 		}
 		
 		imageShow("ScreenA", 500, 500, dstA);
@@ -966,7 +988,9 @@ int main(int argc, char* argv[])
 		line(img_matches, inverse_corner[2], inverse_corner[3], Scalar(0, 255, 0), 2, LINE_AA);
 		line(img_matches, inverse_corner[3], inverse_corner[0], Scalar(0, 255, 0), 2, LINE_AA);
 		//-- Show detected matches
-		//imageShow("surf matches", 1200, 800, img_matches);
+		imageShow("surf matches", 600, 400, img_matches);
+
+		waitKey(0);
 		imwrite(outpath, img_matches);
 
 		// 일치하는 오브젝트 위치 표시하는 사각형 그리기
@@ -995,7 +1019,8 @@ int main(int argc, char* argv[])
 		line(img2, Point2f(rightBottom.x, leftTop.y), rightBottom, Scalar(0, 255, 0), 2, LINE_AA);
 		line(img2, rightBottom, Point2f(leftTop.x, rightBottom.y), Scalar(0, 255, 0), 2, LINE_AA);
 		line(img2, Point2f(leftTop.x, rightBottom.y), leftTop, Scalar(0, 255, 0), 2, LINE_AA);
-		//imageShow("draw square", 1200, 800, img2);
+		//imageShow("draw square", 600, 400, img2);
+
 
 		int width, height;
 		width = rightBottom.x - leftTop.x;
